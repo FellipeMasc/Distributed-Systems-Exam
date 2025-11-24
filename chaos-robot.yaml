@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chaos-robot-sa
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: chaos-robot-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: chaos-robot-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: chaos-robot-role
+subjects:
+  - kind: ServiceAccount
+    name: chaos-robot-sa
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: chaos-robot
+spec:
+  schedule: "* * * * *"   # A cada 1 minuto (mínimo do CronJob)
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: chaos-robot-sa
+          restartPolicy: Never
+          containers:
+            - name: chaos-robot
+              image: bitnami/kubectl:latest   # <--- IMAGEM 100% GARANTIDA
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  # Executar 6 vezes (a cada 10 segundos = 60 segundos total)
+                  for i in 1 2 3 4 5 6; do
+                    echo "Chaos Robot (tentativa $i/6): procurando pod..."
+                    POD=$(kubectl get pods -l app=php-apache -o jsonpath='{.items[0].metadata.name}')
+                    if [ -n "$POD" ]; then
+                      echo "Chaos Robot: deletando $POD"
+                      kubectl delete pod "$POD"
+                    else
+                      echo "None found"
+                    fi
+                    
+                    # Esperar 10 segundos antes da próxima tentativa (exceto na última)
+                    if [ $i -lt 6 ]; then
+                      sleep 10
+                    fi
+                  done
+                  echo "Chaos Robot: ciclo completo"
