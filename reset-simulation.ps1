@@ -29,12 +29,7 @@ kubectl get deploy,svc,hpa,pods
 Write-Host "[4/6] Iniciando Gerador de Carga (load-generator)..." -ForegroundColor Cyan
 
 # Gera trafego continuo para o Service php
-
-# kubectl run  -i --tty load-generator -rm `
-#   --image=curlimages/curl:latest `
-#   --restart=Never `
-#   -- /bin/sh -c "while true; do wget -q -O- http://php; done"
-kubectl run load-generator --image=busybox:1.28 --restart=Never -- /bin/sh -c "while true; do wget -q -O- http://php-apache; done" > $null
+kubectl run load-generator --image=busybox:1.28 --restart=Never -- /bin/sh -c 'while true; do wget -q -O- http://php-apache; done' > $null
 
 Write-Host "      Aguardando a carga comecar a bater (10s)..." -ForegroundColor DarkGray
 Start-Sleep -Seconds 10

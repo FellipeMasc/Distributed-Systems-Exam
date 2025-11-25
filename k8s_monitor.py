@@ -4,15 +4,12 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
-# ================================
-# Funções auxiliares
-# ================================
 
 
 def get_pods():
     try:
         out = subprocess.check_output(
-            ["kubectl", "get", "pods", "-l", "app=php-apache", "--no-headers"],
+            ["kubectl", "get", "pods", "-l", "run=php-apache", "--no-headers"],
             stderr=subprocess.STDOUT,
             text=True,
         )
@@ -21,10 +18,8 @@ def get_pods():
         for line in out.splitlines():
             cols = line.split()
 
-            # Nome do pod
             name = cols[0]
 
-            # STATUS pode ser multi-palavra ("CrashLoopBackOff", "ContainerCreating", "Terminating", etc.)
             status = cols[2]
 
             pods.append((name, status))
@@ -44,9 +39,6 @@ def get_hpa():
 
         cols = out.split()
 
-        # Estrutura típica:
-        # NAME  REF  TARGETS  MINPODS  MAXPODS  REPLICAS  AGE
-        # REPLICAS é sempre a penúltima coluna (antes de AGE)
         if len(cols) >= 2:
             replicas_col = cols[-2]
             if replicas_col.isdigit():
@@ -58,26 +50,21 @@ def get_hpa():
         return None
 
 
-# ================================
-# Painel Tkinter
-# ================================
+
 class MonitorGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Kubernetes Chaos Simulation Monitor - CSC-27")
         self.root.geometry("700x500")
 
-        # Variáveis do painel
         self.total_pods = tk.StringVar(value="0")
         self.running_pods = tk.StringVar(value="0")
         self.terminating_pods = tk.StringVar(value="0")
         self.dead_count = tk.StringVar(value="0")
         self.hpa_replicas = tk.StringVar(value="-")
 
-        # Histórico (para gráfico simplificado)
         self.replicas_history = []
 
-        # Labels
         ttk.Label(root, text="Painel de Simulação Kubernetes", font=("Segoe UI", 14, "bold")).pack(pady=10)
 
         frame = ttk.Frame(root)
@@ -98,25 +85,19 @@ class MonitorGUI:
         ttk.Label(frame, text="HPA réplicas desejadas:", width=20).grid(row=4, column=0)
         ttk.Label(frame, textvariable=self.hpa_replicas).grid(row=4, column=1)
 
-        # Canvas do gráfico
         self.canvas = tk.Canvas(root, width=650, height=250, bg="white")
         self.canvas.pack(pady=15)
 
-        # Iniciar thread de atualização
         self.stop_flag = False
         threading.Thread(target=self.update_loop, daemon=True).start()
 
-    # ============================================
-    # Loop de atualização (roda a cada 1s no fundo)
-    # ============================================
     def update_loop(self):
-        prev_pods = set()  # para detectar pods removidos
+        prev_pods = set()
 
         while not self.stop_flag:
             pods = get_pods()
             pod_names = set([p[0] for p in pods])
 
-            # detecta pods mortos
             dead_now = len(prev_pods - pod_names)
             if dead_now > 0:
                 current = int(self.dead_count.get())
@@ -124,7 +105,6 @@ class MonitorGUI:
 
             prev_pods = pod_names
 
-            # status counts
             running = sum(1 for _, st in pods if st == "Running")
             terminating = sum(1 for _, st in pods if st != "Running")
 
@@ -132,7 +112,6 @@ class MonitorGUI:
             self.running_pods.set(str(running))
             self.terminating_pods.set(str(terminating))
 
-            # Atualizar HPA
             hpa = get_hpa()
             if hpa is not None:
                 self.hpa_replicas.set(str(hpa))
@@ -140,47 +119,53 @@ class MonitorGUI:
                 if len(self.replicas_history) > 40:
                     self.replicas_history.pop(0)
 
-            # Atualizar gráfico
             self.draw_chart()
             
             time.sleep(1)
 
-    # ============================================
-    # Desenho do mini-gráfico (réplicas do HPA)
-    # ============================================
     def draw_chart(self):
         self.canvas.delete("all")
 
-        data = self.replicas_history[-40:]  # manter janela móvel
+        data = self.replicas_history[-40:]
+
+        h = 200
+        w = 600
+        margin_left = 30
+        margin_bottom = 30
+        
+        self.canvas.create_line(margin_left, h, margin_left + w, h, fill="black", width=2)
+        self.canvas.create_line(margin_left, h, margin_left, 0, fill="black", width=2)
 
         if len(data) < 2:
             return
 
-        h = 220
-        w = 630
-        max_rep = max(data) + 1
+        max_rep = max(data) + 1 if max(data) > 0 else 5
 
-        # Normalização dos pontos
+        step = max(1, int(max_rep / 5))
+        for i in range(0, max_rep + 1, step):
+             y_pos = h - (i / max_rep) * h
+             self.canvas.create_text(margin_left - 5, y_pos, text=str(i), anchor="e", font=("Segoe UI", 8))
+             self.canvas.create_line(margin_left - 2, y_pos, margin_left + 2, y_pos, fill="gray")
+
+        self.canvas.create_text(margin_left + w/2, h + 15, text="Tempo (s)", font=("Segoe UI", 9))
+
         points = []
         for i, r in enumerate(data):
-            x = (i / (len(data) - 1)) * w
+            x = margin_left + (i / (len(data) - 1)) * w
             y = h - (r / max_rep) * h
             points.append((x, y))
 
-        # Desenhar linhas como animação autêntica
         for i in range(len(points) - 1):
             x1, y1 = points[i]
             x2, y2 = points[i + 1]
 
-            # criar efeito de deslizamento / fade-in
             self.canvas.create_line(
                 x1, y1, x2, y2,
-                fill="#357DED",       # azul bonito
+                fill="#357DED",
                 width=3,
                 capstyle=tk.ROUND
             )
 
-            # animação sutil: ponto pulsante no final
             if i == len(points) - 2:
                 self.canvas.create_oval(
                     x2 - 4, y2 - 4, x2 + 4, y2 + 4,
@@ -188,16 +173,12 @@ class MonitorGUI:
                     outline=""
                 )
 
-        # Título do gráfico
         self.canvas.create_text(
             325, 15,
             text="Histórico de réplicas (HPA)",
             font=("Segoe UI", 12, "bold")
         )
 
-# ============================================
-# MAIN
-# ============================================
 if __name__ == "__main__":
     root = tk.Tk()
     app = MonitorGUI(root)

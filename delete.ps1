@@ -7,14 +7,13 @@ Write-Host "============================================"
 # 1. REMOVER FERRAMENTAS DE CAOS (Versão Monkey e Robot para garantir)
 Write-Host ">> [1/6] Removendo Agentes do Caos..." -ForegroundColor Yellow
 # Deleta CronJobs
-kubectl delete cronjob chaos-monkey chaos-robot --ignore-not-found=true
+kubectl delete cronjob chaos-robot --ignore-not-found=true
 # Deleta Jobs criados pelos CronJobs
-kubectl delete job -l job-name=chaos-monkey --ignore-not-found=true
 kubectl delete job -l job-name=chaos-robot --ignore-not-found=true
 # Deleta Permissões (RBAC)
-kubectl delete sa chaos-monkey-sa chaos-robot-sa --ignore-not-found=true
-kubectl delete role chaos-monkey-role chaos-robot-role --ignore-not-found=true
-kubectl delete rolebinding chaos-monkey-binding chaos-robot-rolebinding --ignore-not-found=true
+kubectl delete sa  chaos-robot-sa --ignore-not-found=true
+kubectl delete role chaos-robot-role --ignore-not-found=true
+kubectl delete rolebinding chaos-robot-rolebinding --ignore-not-found=true
 
 # 2. REMOVER APLICAÇÕES (php-apache E nginx-app)
 Write-Host ">> [2/6] Removendo Aplicações e Serviços..." -ForegroundColor Yellow
@@ -32,9 +31,8 @@ kubectl delete pod load-generator --ignore-not-found=true
 # 4. LIMPEZA FINAL VIA ARQUIVOS (REDE DE SEGURANÇA)
 Write-Host ">> [4/6] Varredura final por arquivos..." -ForegroundColor Yellow
 # Tenta deletar baseado nos arquivos caso algo tenha escapado pelos nomes
-kubectl delete -f app-simulation.yaml --ignore-not-found=true
 kubectl delete -f app-kubernetes.yaml --ignore-not-found=true
-kubectl delete -f chaos-monkey.yaml --ignore-not-found=true
+kubectl delete -f chaos-robot.yaml --ignore-not-found=true
 
 # 5. REMOVER RÉPLICAS ÓRFÃS
 Write-Host ">> [5/6] Removendo ReplicaSets órfãos..." -ForegroundColor Yellow

@@ -32,7 +32,8 @@ kind: CronJob
 metadata:
   name: chaos-robot
 spec:
-  schedule: "* * * * *"   # A cada 1 minuto (mínimo do CronJob)
+  schedule: "*/5 * * * *"  
+  concurrencyPolicy: Allow
   jobTemplate:
     spec:
       template:
@@ -41,25 +42,22 @@ spec:
           restartPolicy: Never
           containers:
             - name: chaos-robot
-              image: bitnami/kubectl:latest   # <--- IMAGEM 100% GARANTIDA
+              image: bitnami/kubectl:latest   
               command:
                 - /bin/sh
                 - -c
                 - |
-                  # Executar 6 vezes (a cada 10 segundos = 60 segundos total)
-                  for i in 1 2 3 4 5 6; do
-                    echo "Chaos Robot (tentativa $i/6): procurando pod..."
-                    POD=$(kubectl get pods -l app=php-apache -o jsonpath='{.items[0].metadata.name}')
-                    if [ -n "$POD" ]; then
-                      echo "Chaos Robot: deletando $POD"
-                      kubectl delete pod "$POD"
-                    else
-                      echo "None found"
-                    fi
+                  echo "Chaos Robot: procurando 3 pods aleatórios a cada 5 minutos..."
+                  
+                  TARGETS=$(kubectl get pods -l run=php-apache -o name | awk 'BEGIN{srand()} {print rand() "\t" $0}' | sort -n | head -n 3 | cut -f2-)
+                  
+                  if [ -n "$TARGETS" ]; then
+                    echo "Chaos Robot: Alvos selecionados:"
+                    echo "$TARGETS"
                     
-                    # Esperar 10 segundos antes da próxima tentativa (exceto na última)
-                    if [ $i -lt 6 ]; then
-                      sleep 10
-                    fi
-                  done
+                    echo "$TARGETS" | xargs kubectl delete
+                  else
+                    echo "Chaos Robot: Nenhum pod encontrado."
+                  fi
+                  
                   echo "Chaos Robot: ciclo completo"
